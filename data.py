@@ -23,8 +23,8 @@ def get_deck(cabin):
 
 # Load the data
 os.chdir('/home/osboxes/projects/titanic/input')
-train_df = shuffle(pd.read_csv('train.csv', header=0),random_state=42)
-test_df = shuffle(pd.read_csv('test.csv', header=0),random_state=42)
+train_df = pd.read_csv('train.csv', header=0)
+test_df = pd.read_csv('test.csv', header=0)
 both_df = pd.concat([train_df, test_df], axis=0)
 irish_names = pd.read_csv('irish_names.csv', header=0)
 aristocratic_names = pd.read_csv('aristocratic_names.csv', header=0)
