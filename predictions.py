@@ -10,11 +10,12 @@ import xgboost as xgb
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import roc_auc_score
 from sklearn.utils import shuffle
-from sklearn.linear_model import LogisticRegression, SGDClassifier
+from sklearn.linear_model import LogisticRegression, SGDClassifier, PassiveAggressiveClassifier, Ridge, Lasso
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, ExtraTreesClassifier, RandomForestRegressor
 from sklearn import cross_validation
 from sklearn.grid_search import GridSearchCV
 from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.neighbors import KNeighborsClassifier
 import numpy as np
 import os
 import pdb
@@ -25,6 +26,9 @@ os.chdir('/home/osboxes/projects/titanic/input')
 train_df = shuffle(pd.read_csv('train_prepped.csv', header=0),random_state=42)
 test_df = shuffle(pd.read_csv('test_prepped.csv', header=0),random_state=42)
 
+train_df = train_df.drop(["Surname", "Name", "Ticket", "Cabin"], axis=1)
+test_df = test_df.drop(["Surname", "Name", "Ticket", "Cabin"], axis=1)
+
 # perform feature selection
 collist = train_df.columns.tolist()
 collist.remove("Survived")
@@ -34,9 +38,11 @@ selector.fit(train_df[collist], train_df["Survived"])
 scores = -np.log10(selector.pvalues_)
 
 # review predictive power of predictors
-plt.bar(range(len(predictors)), scores)
-plt.xticks(range(len(predictors)), predictors, rotation='vertical')
-plt.show()
+plt.bar(range(len(collist)), scores)
+plt.xticks(range(len(collist)), collist, rotation='vertical')
+#plt.show()
+
+
 predictors = ["Pclass", "Sex", "Embarked", "Title", "Irish", "FamilyWomen", "Fare", "Parch", "Age", "WomanWChild",
               "FamilyCost", "Deck"]
 
@@ -46,11 +52,16 @@ X_train, X_test, y_train, y_test = cross_validation.train_test_split(train_df[pr
 
 # modelling: algorithms, parameters to use in our ensemble
 algorithms = [
-    ["RFC", RandomForestClassifier(n_estimators=200, class_weight="auto")],
-    ["RFR", RandomForestRegressor(n_estimators=100, oob_score=True, random_state=42)],
-    ["Logit", LogisticRegression(random_state=1)],
-    ["GradientBoost", GradientBoostingClassifier()],
-    ["XGB", xgb.XGBClassifier(max_depth=3, n_estimators=300, learning_rate=0.05)]
+    ["RFC", RandomForestClassifier(random_state=42)],
+    ["RFR", RandomForestRegressor(random_state=42)],
+    ["Ridge", Ridge()],
+    ["Lasso", Lasso(random_state=42)],
+    ["Logit", LogisticRegression(random_state=42)],
+    ["SGD", SGDClassifier(random_state=42)],
+    ["Passive-aggressive", PassiveAggressiveClassifier(random_state=42)],
+    ["GradientBoost", GradientBoostingClassifier(random_state=42)],
+    ["kNN", KNeighborsClassifier()],
+    ["XGB", xgb.XGBClassifier()]
 ]
 
 # start collecting results from each model
@@ -91,5 +102,6 @@ print("Ensemble test_set accuracy: ", accuracy_test)
 # see https://www.kaggle.com/c/titanic-gettingStarted/download/gendermodel.csv
 # for an example of what it's supposed to look like.
 submission = pd.DataFrame({ 'PassengerId': test_df['PassengerId'],
-                           'Survived': ensemble_results_valid["prediction"]})
+                           'Survived': ensemble_results_valid["prediction"].astype(int)})
 submission.to_csv("submission.csv", index=False)
+ensemble_results_valid.to_csv("ensemble_results.csv")
