@@ -156,6 +156,9 @@ for k, v in deck_mapping.items():
     train_df["Deck"][train_df["Deck"] == k] = v
     test_df["Deck"][test_df["Deck"] == k] = v
 
+train_df["Deck"] = train_df["Deck"].astype(int)
+test_df["Deck"] = test_df["Deck"].astype(int)
+
 # perform feature selection
 predictors = ["Pclass", "Sex", "Age", "SibSp", "Parch", "Fare", "Embarked", "Title",
     "Irish", "Aristocrat", "FamilyMembers", "FamilyWomen", "FamilyChildren", "WomanWChild",
@@ -172,26 +175,50 @@ scores = -np.log10(selector.pvalues_)
 predictors = ["Pclass", "Sex", "Embarked", "Title", "Irish", "FamilyWomen", "Fare", "Parch", "Age", "WomanWChild",
               "FamilyCost", "Deck"]
 
+
+# modelling: cross validation definition
 X_train, X_test, y_train, y_test = cross_validation.train_test_split(train_df[predictors], train_df["Survived"], test_size=0.3, random_state=42)
 
-model = RandomForestRegressor(n_estimators=100, oob_score=True, random_state=42)
-model = model.fit(X_train, y_train)
-feature_importances = pd.Series(model.feature_importances_, index=X_train.columns)
-feature_importances.sort()
+# modelling: algorithms, parameters to use in our ensemble
+algorithms = [
+    ["RFC", RandomForestClassifier(n_estimators=200, class_weight="auto")],
+    ["RFR", RandomForestRegressor(n_estimators=100, oob_score=True, random_state=42)],
+    ["Logit", LogisticRegression(random_state=1)],
+    ["GradientBoost", GradientBoostingClassifier()],
+    ["XGB", xgb.XGBClassifier(max_depth=3, n_estimators=300, learning_rate=0.05)]
+]
 
-predictions = model.predict(X_test)
-accuracy = np.mean((predictions > 0.5).astype(int) == y_test)
+# start collecting results from each model
+ensemble_results = pd.DataFrame(y_test)
 
-print("c-stat:", roc_auc_score(y_train, model.oob_prediction_))
-print("accuracy:", accuracy)
-print("feature importance\n", feature_importances)
+for name, alg in algorithms:
+    # Fit the algorithm on the training data.
+    alg.fit(X_train, y_train)
+    predictions_train = alg.predict(X_train)
+    accuracy_train = np.mean((predictions_train> 0.5).astype(int) == y_train)
+    predictions_test = alg.predict(X_test)
+    accuracy_test = np.mean((predictions_test > 0.5).astype(int) == y_test)
+    print("Algorithm: ", name, "Train_set accuracy: ", accuracy_train, "Test_set accuracy: ",accuracy_test)
+    ensemble_results[name] = predictions_test
 
+collist = ensemble_results.columns.tolist()
+collist.remove("Survived")
 
-predictions = (model.predict(test_df[predictors]) > 0.5).astype(int)
+# predictions based on mean
+#ensemble_results["mean"] = ensemble_results[collist].astype(float).mean(axis=1)
+#ensemble_results["prediction"] = (ensemble_results["mean"] > 0.5).astype(int)
+
+# predictions based on majority vote
+ensemble_results[collist] = ensemble_results[collist].astype(float)
+ensemble_results[collist] = (ensemble_results[collist] > 0.5).astype(int)
+ensemble_results["prediction"] = ensemble_results[collist].mode(axis=1)[0]
+
+accuracy_test = np.mean(ensemble_results["prediction"] == y_test)
+print("Ensemble test_set accuracy: ", accuracy_test)
 
 # Kaggle needs the submission to have a certain format;
 # see https://www.kaggle.com/c/titanic-gettingStarted/download/gendermodel.csv
 # for an example of what it's supposed to look like.
 submission = pd.DataFrame({ 'PassengerId': test_df['PassengerId'],
-                           'Survived': predictions.astype(int) })
+                           'Survived': ensemble_results["prediction"]})
 submission.to_csv("submission.csv", index=False)
