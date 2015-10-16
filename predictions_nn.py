@@ -44,7 +44,7 @@ predictors = ["Pclass", "Sex", "Embarked", "Title", "Irish", "FamilyWomen", "Far
 X_train, X_test, y_train, y_test = cross_validation.train_test_split(train_df[predictors], train_df["Survived"], test_size=0.3, random_state=42)
 
 # modelling: algorithms, parameters to use in our ensemble
-
+# will need to transform dataframe for use in NN
 
 
 # Kaggle needs the submission to have a certain format;
